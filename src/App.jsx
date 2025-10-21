@@ -15,6 +15,18 @@ function App() {
     scrollToBottom()
   }, [messages])
 
+  // Function to remove markdown formatting
+  const cleanMarkdown = (text) => {
+    return text
+      .replace(/\*\*/g, '')  // Remove bold **
+      .replace(/\*/g, '')    // Remove italic *
+      .replace(/\_\_/g, '')  // Remove bold __
+      .replace(/\_/g, '')    // Remove italic _
+      .replace(/\#\#\#\s/g, '')  // Remove h3 ###
+      .replace(/\#\#\s/g, '')    // Remove h2 ##
+      .replace(/\#\s/g, '')      // Remove h1 #
+  }
+
   const sendMessage = async () => {
     if (!input.trim()) return
 
@@ -45,8 +57,9 @@ function App() {
         throw new Error(data.error || `API request failed: ${response.status}`)
       }
       
-      const content = data.choices?.[0]?.message?.content || 'No response received'
-      const botMessage = { role: 'assistant', content }
+      const rawContent = data.choices?.[0]?.message?.content || 'No response received'
+      const cleanedContent = cleanMarkdown(rawContent)
+      const botMessage = { role: 'assistant', content: cleanedContent }
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
       console.error('Frontend error:', error)
@@ -63,8 +76,6 @@ function App() {
     setMessages([])
     setError('')
   }
-
-
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
