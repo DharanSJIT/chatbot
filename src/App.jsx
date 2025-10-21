@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2 } from 'lucide-react'
 
 function App() {
   const [messages, setMessages] = useState([])
@@ -7,9 +7,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copiedIndex, setCopiedIndex] = useState(null)
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchActive, setSearchActive] = useState(false)
+  const [highlightedMessages, setHighlightedMessages] = useState(new Set())
+  const [menuOpen, setMenuOpen] = useState(false)
   const messagesEndRef = useRef(null)
   const abortControllerRef = useRef(null)
+  const searchInputRef = useRef(null)
+  const menuRef = useRef(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -18,6 +24,55 @@ function App() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    if (searchActive && searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }, [searchActive])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false)
+      }
+    }
+
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [menuOpen])
+
+  // Search messages
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const highlighted = new Set()
+      messages.forEach((msg, idx) => {
+        if (msg.content.toLowerCase().includes(searchQuery.toLowerCase())) {
+          highlighted.add(idx)
+        }
+      })
+      setHighlightedMessages(highlighted)
+    } else {
+      setHighlightedMessages(new Set())
+    }
+  }, [searchQuery, messages])
+
+  // Calculate character and approximate token count
+  const getInputStats = () => {
+    const charCount = input.length
+    const tokenCount = Math.ceil(input.split(/\s+/).filter(w => w.length > 0).length * 1.3)
+    return { charCount, tokenCount }
+  }
+
+  const { charCount, tokenCount } = getInputStats()
 
   // Function to remove markdown formatting
   const cleanMarkdown = (text) => {
@@ -60,6 +115,16 @@ function App() {
     }
   }
 
+  // Toggle search
+  const toggleSearch = () => {
+    setSearchActive(!searchActive)
+    setMenuOpen(false)
+    if (searchActive) {
+      setSearchQuery('')
+      setHighlightedMessages(new Set())
+    }
+  }
+
   // Export chat as text
   const exportChat = () => {
     if (messages.length === 0) {
@@ -84,6 +149,7 @@ function App() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    setMenuOpen(false)
   }
 
   const sendMessage = async () => {
@@ -148,64 +214,177 @@ function App() {
   const clearChat = () => {
     setMessages([])
     setError('')
+    setSearchQuery('')
+    setHighlightedMessages(new Set())
+    setMenuOpen(false)
+  }
+
+  // Highlight text in search results
+  const highlightText = (text, query) => {
+    if (!query.trim()) return text
+    
+    const parts = text.split(new RegExp(`(${query})`, 'gi'))
+    return parts.map((part, i) => 
+      part.toLowerCase() === query.toLowerCase() 
+        ? <mark key={i} className="bg-yellow-300 dark:bg-yellow-600">{part}</mark>
+        : part
+    )
   }
 
   return (
     <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-      <div className={`${darkMode ? 'bg-green-700' : 'bg-green-600'} text-white p-4 flex justify-between items-center`}>
-        <h1 className="text-xl font-bold">AI Chatbot</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2`}
-            title={darkMode ? 'Light Mode' : 'Dark Mode'}
-          >
-            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-          <button
-            onClick={exportChat}
-            className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2`}
-            title="Export Chat"
-          >
-            <Download size={16} />
-            Export
-          </button>
-          <button
-            onClick={clearChat}
-            className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm`}
-          >
-            Clear Chat
-          </button>
+      {/* Header */}
+      <div className={`${darkMode ? 'bg-green-700' : 'bg-green-600'} text-white p-3 sm:p-4`}>
+        <div className="flex justify-between items-center">
+          <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
+          
+          {/* Desktop Menu */}
+          <div className="hidden md:flex gap-2">
+            <button
+              onClick={toggleSearch}
+              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors ${searchActive ? 'ring-2 ring-white' : ''}`}
+              title="Search Chat"
+            >
+              <Search size={16} />
+            </button>
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
+              title={darkMode ? 'Light Mode' : 'Dark Mode'}
+            >
+              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              onClick={exportChat}
+              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
+              title="Export Chat"
+            >
+              <Download size={16} />
+              <span className="hidden lg:inline">Export</span>
+            </button>
+            <button
+              onClick={clearChat}
+              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
+            >
+              Clear Chat
+            </button>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className={`p-2 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded transition-all duration-200`}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            
+            {/* Mobile Dropdown Menu */}
+            {menuOpen && (
+              <div className={`absolute right-0 mt-2 w-48 ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-lg z-50 overflow-hidden border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <button
+                  onClick={toggleSearch}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <Search size={18} />
+                  <span>Search</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setDarkMode(!darkMode)
+                    setMenuOpen(false)
+                  }}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                  <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+                </button>
+                <button
+                  onClick={exportChat}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <Download size={18} />
+                  <span>Export Chat</span>
+                </button>
+                <button
+                  onClick={clearChat}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                >
+                  <Trash2 size={18} />
+                  <span>Clear Chat</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+        
+        {/* Search Bar */}
+        {searchActive && (
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search messages..."
+                className={`w-full p-2 pr-8 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-white text-sm sm:text-base`}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <span className="text-xs sm:text-sm whitespace-nowrap">
+              {highlightedMessages.size} {highlightedMessages.size === 1 ? 'result' : 'results'}
+            </span>
+          </div>
+        )}
       </div>
 
+      {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 sm:px-4 text-sm">
           <strong>Error: </strong>{error}
         </div>
       )}
       
-      <div className="flex-1 p-4 overflow-y-auto pb-20">
+      {/* Messages Container */}
+      <div className="flex-1 p-3 sm:p-4 overflow-y-auto pb-32 sm:pb-36">
         {messages.length === 0 && (
-          <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-8`}>
-            <p>Welcome! Start a conversation with Groq AI.</p>
-            <p className="text-sm mt-2">Ask anything and get lightning-fast AI responses!</p>
+          <div className={`text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-8 px-4`}>
+            <p className="text-base sm:text-lg">Welcome! Start a conversation with AI.</p>
+            <p className="text-xs sm:text-sm mt-2">Ask anything and get lightning-fast AI responses!</p>
           </div>
         )}
         
         {messages.map((msg, idx) => (
-          <div key={idx} className={`mb-4 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-            <div className={`inline-block p-3 rounded-lg max-w-2xl relative group ${
+          <div 
+            key={idx} 
+            className={`mb-3 sm:mb-4 ${msg.role === 'user' ? 'text-right' : 'text-left'} ${
+              highlightedMessages.has(idx) ? 'animate-pulse' : ''
+            }`}
+          >
+            <div className={`inline-block p-2.5 sm:p-3 rounded-lg max-w-[85%] sm:max-w-2xl relative group ${
               msg.role === 'user' 
-                ? 'bg-green-500 text-white' 
+                ? darkMode 
+                  ? 'bg-gray-700 text-white border border-gray-600' 
+                  : 'bg-gray-100 text-gray-900 border border-gray-300'
                 : darkMode 
                   ? 'bg-gray-800 border border-gray-700 text-gray-100' 
                   : 'bg-white border shadow-sm'
-            }`}>
-              <div className="whitespace-pre-line">
-                {msg.content}
+            } ${highlightedMessages.has(idx) ? 'ring-2 ring-yellow-400' : ''}`}>
+              <div className="whitespace-pre-line text-sm sm:text-base break-words">
+                {highlightedMessages.has(idx) && searchQuery 
+                  ? highlightText(msg.content, searchQuery)
+                  : msg.content
+                }
               </div>
-              <div className={`text-xs mt-2 ${msg.role === 'user' ? 'text-green-100' : darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+              <div className={`text-xs mt-1.5 sm:mt-2 ${msg.role === 'user' ? darkMode ? 'text-gray-400' : 'text-gray-500' : darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                 {msg.timestamp}
               </div>
               {msg.role === 'assistant' && (
@@ -226,17 +405,26 @@ function App() {
             </div>
           </div>
         ))}
+        
+        {/* Typing Indicator */}
         {loading && (
-          <div className="text-left mb-4">
-            <div className={`inline-block p-3 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
+          <div className="text-left mb-3 sm:mb-4">
+            <div className={`inline-block p-2.5 sm:p-3 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
               <div className="flex items-center gap-2">
-                <span>AI is thinking...</span>
+                <span className="flex items-center gap-1 text-sm sm:text-base">
+                  AI is typing
+                  <span className="flex gap-0.5">
+                    <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
+                    <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
+                    <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                  </span>
+                </span>
                 <button
                   onClick={stopGeneration}
-                  className={`p-1 rounded ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-300'}`}
+                  className={`p-1 rounded ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-300'} transition-colors`}
                   title="Stop generation"
                 >
-                  <Square size={14} />
+                  <Square size={14} className="fill-current" />
                 </button>
               </div>
             </div>
@@ -245,26 +433,37 @@ function App() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className={`fixed bottom-0 left-0 right-0 p-4 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'} border-t`}>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask anything..."
-            className={`flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-              darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : ''
-            }`}
-            disabled={loading}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={loading || !input.trim()}
-            className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Send
-          </button>
+      {/* Input Area */}
+      <div className={`fixed bottom-0 left-0 right-0 p-3 sm:p-4 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'} border-t`}>
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          
+          {/* Input and Send Button */}
+          <div className="flex gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  sendMessage()
+                }
+              }}
+              placeholder="Ask anything..."
+              rows="1"
+              className={`flex-1 p-2.5 sm:p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none text-sm sm:text-base ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : ''
+              }`}
+              style={{ minHeight: '44px', maxHeight: '120px' }}
+              disabled={loading}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={loading || !input.trim()}
+              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm sm:text-base font-medium"
+            >
+              Send
+            </button>
+          </div>
         </div>
       </div>
     </div>
