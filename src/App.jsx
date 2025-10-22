@@ -383,8 +383,8 @@ function App() {
         // Scroll to bottom during typing
         scrollToBottom()
         
-        // Add delay between characters (adjust speed here)
-        await new Promise(resolve => setTimeout(resolve, 1))
+        // No delay for maximum speed
+         await new Promise(resolve => setTimeout(resolve, 0))
       }
       
       // Only add final message if not stopped
