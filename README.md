@@ -4,7 +4,7 @@ A modern, responsive AI chatbot application built with React and powered by LLaM
 
 ##  Features
 
-- **🚀 Lightning-fast AI responses** powered by Groq LLaMA 3.1-8B
+- **🚀 Lightning-fast AI responses** powered by LLaMA 3.1-8B
 - **💬 Real-time streaming** with character-by-character typing animation
 - **📱 Fully responsive design** optimized for desktop and mobile
 - **🌙 Dark/Light mode** toggle for comfortable viewing
@@ -37,7 +37,7 @@ A modern, responsive AI chatbot application built with React and powered by LLaM
 ### Prerequisites
 - Node.js 18+ and npm
 - AstraDB account and database
-- Groq API key
+- API key
 
 ### Installation
 
