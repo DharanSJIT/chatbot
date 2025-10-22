@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare, MoreVertical } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare, MoreVertical, FileText, File, Share2, Mail } from 'lucide-react'
 import Auth from './components/Auth'
 import Sidebar from './components/Sidebar'
 import API_BASE_URL from './config/api'
@@ -22,6 +22,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const messagesEndRef = useRef(null)
   const abortControllerRef = useRef(null)
   const searchInputRef = useRef(null)
@@ -30,17 +31,33 @@ function App() {
   // Check for existing user session and restore chat state
   useEffect(() => {
     const checkAuth = async () => {
+      // Check for shared chat in URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const sharedData = urlParams.get('shared')
+      if (sharedData) {
+        try {
+          const chatData = JSON.parse(atob(sharedData))
+          setMessages(chatData.messages || [])
+          // Clear URL parameter
+          window.history.replaceState({}, document.title, window.location.pathname)
+        } catch (error) {
+          console.error('Invalid shared chat data')
+        }
+      }
+      
       const savedUser = localStorage.getItem('user')
       if (savedUser) {
         try {
           const userData = JSON.parse(savedUser)
           setUser(userData)
           
-          // Restore current chat if exists
-          const savedChatId = localStorage.getItem('currentChatId')
-          if (savedChatId && savedChatId !== 'null') {
-            setCurrentChatId(savedChatId)
-            await loadUserMessages(userData.userId, savedChatId)
+          // Only restore chat if no shared data
+          if (!sharedData) {
+            const savedChatId = localStorage.getItem('currentChatId')
+            if (savedChatId && savedChatId !== 'null') {
+              setCurrentChatId(savedChatId)
+              await loadUserMessages(userData.userId, savedChatId)
+            }
           }
         } catch (error) {
           console.error('Invalid user data, clearing session')
@@ -180,9 +197,12 @@ function App() {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setMenuOpen(false)
       }
+      if (showExportMenu && !event.target.closest('.export-menu')) {
+        setShowExportMenu(false)
+      }
     }
 
-    if (menuOpen) {
+    if (menuOpen || showExportMenu) {
       document.addEventListener('mousedown', handleClickOutside)
       document.addEventListener('touchstart', handleClickOutside)
     }
@@ -191,7 +211,7 @@ function App() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('touchstart', handleClickOutside)
     }
-  }, [menuOpen])
+  }, [menuOpen, showExportMenu])
 
   // Search messages
   useEffect(() => {
@@ -282,31 +302,102 @@ function App() {
     }
   }
 
-  // Export chat as text
-  const exportChat = () => {
-    if (messages.length === 0) {
-      alert('No messages to export!')
-      return
-    }
 
-    let chatText = 'AI Chatbot Conversation\n'
-    chatText += '========================\n\n'
-    
+
+  // Export functions
+  const exportAsText = () => {
+    if (messages.length === 0) return
+    let content = 'AI Chatbot Conversation\n========================\n\n'
     messages.forEach(msg => {
-      chatText += `[${msg.timestamp}] ${msg.role === 'user' ? 'You' : 'AI'}:\n`
-      chatText += `${msg.content}\n\n`
+      content += `[${msg.timestamp}] ${msg.role === 'user' ? 'You' : 'AI'}:\n${msg.content}\n\n`
     })
+    downloadFile(content, 'text/plain', 'txt')
+  }
 
-    const blob = new Blob([chatText], { type: 'text/plain' })
+  const exportAsMarkdown = () => {
+    if (messages.length === 0) return
+    let content = '# AI Chatbot Conversation\n\n'
+    messages.forEach(msg => {
+      content += `## ${msg.role === 'user' ? 'You' : 'AI'} (${msg.timestamp})\n\n${msg.content}\n\n---\n\n`
+    })
+    downloadFile(content, 'text/markdown', 'md')
+  }
+
+  const exportAsPDF = async () => {
+    if (messages.length === 0) return
+    const { jsPDF } = await import('jspdf')
+    const doc = new jsPDF()
+    
+    doc.setFontSize(16)
+    doc.text('AI Chatbot Conversation', 20, 20)
+    
+    let yPosition = 40
+    messages.forEach(msg => {
+      doc.setFontSize(12)
+      doc.text(`${msg.role === 'user' ? 'You' : 'AI'} (${msg.timestamp}):`, 20, yPosition)
+      yPosition += 10
+      
+      const lines = doc.splitTextToSize(msg.content, 170)
+      doc.text(lines, 20, yPosition)
+      yPosition += lines.length * 5 + 10
+      
+      if (yPosition > 270) {
+        doc.addPage()
+        yPosition = 20
+      }
+    })
+    
+    doc.save(`chat-${new Date().toISOString().slice(0, 10)}.pdf`)
+  }
+
+  const downloadFile = (content, mimeType, extension) => {
+    const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `chat-${new Date().toISOString().slice(0, 10)}.txt`
+    a.download = `chat-${new Date().toISOString().slice(0, 10)}.${extension}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
+    setShowExportMenu(false)
     setMenuOpen(false)
+  }
+
+  // Share chat via link
+  const shareChat = async () => {
+    const chatData = {
+      messages: messages.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp })),
+      title: `Chat from ${new Date().toLocaleDateString()}`
+    }
+    const encodedData = btoa(JSON.stringify(chatData))
+    const shareUrl = `${window.location.origin}?shared=${encodedData}`
+    
+    if (navigator.share) {
+      await navigator.share({ title: 'AI Chat Conversation', url: shareUrl })
+    } else {
+      await navigator.clipboard.writeText(shareUrl)
+      alert('Share link copied to clipboard!')
+    }
+    setMenuOpen(false)
+  }
+
+  // Email conversation
+  const emailChat = () => {
+    let content = 'AI Chatbot Conversation\n========================\n\n'
+    messages.forEach(msg => {
+      content += `[${msg.timestamp}] ${msg.role === 'user' ? 'You' : 'AI'}:\n${msg.content}\n\n`
+    })
+    
+    const subject = `AI Chat Conversation - ${new Date().toLocaleDateString()}`
+    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(content)}`
+    window.open(mailtoLink)
+    setMenuOpen(false)
+  }
+
+  // Copy specific message
+  const copyMessage = async (content, index) => {
+    await copyToClipboard(content, index)
   }
 
   const sendMessage = async () => {
@@ -590,14 +681,36 @@ function App() {
             >
               {darkMode ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button
-              onClick={exportChat}
-              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
-              title="Export Chat"
-            >
-              <Download size={16} />
-              <span className="hidden lg:inline">Export</span>
-            </button>
+            <div className="relative export-menu">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
+                title="Export Chat"
+              >
+                <Download size={16} />
+                <span className="hidden lg:inline">Export</span>
+              </button>
+              
+              {showExportMenu && (
+                <div className={`absolute right-0 top-full mt-2 w-48 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg shadow-lg z-50`}>
+                  <button onClick={exportAsText} className={`w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}>
+                    <FileText size={16} className="inline mr-2" />Text
+                  </button>
+                  <button onClick={exportAsMarkdown} className={`w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}>
+                    <FileText size={16} className="inline mr-2" />Markdown
+                  </button>
+                  <button onClick={exportAsPDF} className={`w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}>
+                    <File size={16} className="inline mr-2" />PDF
+                  </button>
+                  <button onClick={shareChat} className={`w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <Share2 size={16} className="inline mr-2" />Share Link
+                  </button>
+                  <button onClick={emailChat} className={`w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}>
+                    <Mail size={16} className="inline mr-2" />Email
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={clearChat}
               className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
@@ -634,7 +747,7 @@ function App() {
           <div className="md:hidden relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className={`p-2 ${darkMode ? ' hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded transition-all duration-200`}
+              className={`p-2 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded transition-all duration-200`}
             >
               {menuOpen ? <X size={20} /> : <MoreVertical size={20} />}
             </button>
@@ -660,11 +773,11 @@ function App() {
                   <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
                 </button>
                 <button
-                  onClick={exportChat}
+                  onClick={() => setShowExportMenu(!showExportMenu)}
                   className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
                 >
                   <Download size={18} />
-                  <span>Export Chat</span>
+                  <span>Export Options</span>
                 </button>
                 <button
                   onClick={clearChat}
@@ -767,10 +880,10 @@ function App() {
               <div className={`text-xs mt-1.5 sm:mt-2 ${msg.role === 'user' ? darkMode ? 'text-gray-400' : 'text-gray-500' : darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                 {msg.timestamp}
               </div>
-              {msg.role === 'assistant' && (
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => copyToClipboard(msg.content, idx)}
-                  className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                  onClick={() => copyMessage(msg.content, idx)}
+                  className={`p-1.5 rounded ${
                     darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
                   }`}
                   title="Copy message"
@@ -781,7 +894,9 @@ function App() {
                     <Copy size={14} className={darkMode ? 'text-gray-300' : 'text-gray-600'} />
                   )}
                 </button>
-              )}
+              </div>
+              
+
             </div>
           </div>
         ))}
