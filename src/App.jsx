@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare, MoreVertical, FileText, File, Share2, Mail } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare, MoreVertical, FileText, File, Share2, Mail, Plus } from 'lucide-react'
 import Auth from './components/Auth'
 import Sidebar from './components/Sidebar'
 import API_BASE_URL from './config/api'
@@ -28,9 +28,31 @@ function App() {
   const searchInputRef = useRef(null)
   const menuRef = useRef(null)
 
+  // Check backend connectivity
+  const checkBackendHealth = async () => {
+    try {
+      console.log('Checking backend connectivity at:', API_BASE_URL)
+      const response = await fetch(`${API_BASE_URL}/health`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Backend is healthy:', data)
+        return true
+      } else {
+        console.error('Backend health check failed:', response.status)
+        return false
+      }
+    } catch (error) {
+      console.error('Backend is not accessible:', error)
+      return false
+    }
+  }
+
   // Check for existing user session and restore chat state
   useEffect(() => {
     const checkAuth = async () => {
+      // Check backend connectivity first
+      await checkBackendHealth()
+      
       // Check for shared chat in URL
       const urlParams = new URLSearchParams(window.location.search)
       const sharedData = urlParams.get('shared')
@@ -94,25 +116,44 @@ function App() {
     if (user && chatId) {
       try {
         console.log('Saving message to chat:', chatId, 'Message:', message.content?.substring(0, 30))
-        await fetch(`${API_BASE_URL}/api/messages`, {
+        
+        // Create a clean message object without any potential circular references
+        const cleanMessage = {
+          role: message.role,
+          content: String(message.content || ''), // Ensure content is a string
+          timestamp: message.timestamp,
+          userId: user.userId,
+          chatId: String(chatId) // Ensure chatId is a string
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/api/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            ...message, 
-            userId: user.userId,
-            chatId: chatId 
-          })
+          body: JSON.stringify(cleanMessage)
         })
+        
+        if (!response.ok) {
+          const errorData = await response.text()
+          console.error('Failed to save message - server error:', response.status, errorData)
+          return false
+        }
+        
+        const result = await response.json()
+        console.log('Message saved successfully:', result._id)
         
         // Refresh sidebar
         if (window.refreshSidebar) {
           setTimeout(() => window.refreshSidebar(), 300)
         }
+        
+        return true
       } catch (error) {
         console.error('Failed to save message:', error)
+        return false
       }
     } else {
       console.log('Not saving message - missing user or chatId:', { user: !!user, chatId })
+      return false
     }
   }
 
@@ -124,25 +165,37 @@ function App() {
 
   // Create new chat with title
   const createNewChat = async (title = 'New Chat') => {
-    if (!user) return
+    if (!user) {
+      console.error('Cannot create chat - no user logged in')
+      return null
+    }
     
     try {
+      console.log('Creating new chat with title:', title)
+      
+      // Ensure we only send plain data, no DOM elements or React components
+      const requestData = {
+        userId: user.userId,
+        title: String(title) // Ensure title is a string
+      }
+      
       const response = await fetch(`${API_BASE_URL}/api/messages/chats`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: user.userId,
-          title: title
-        })
+        body: JSON.stringify(requestData)
       })
       
       if (response.ok) {
         const newChat = await response.json()
+        console.log('New chat created successfully:', newChat._id)
         setCurrentChatId(newChat._id)
         localStorage.setItem('currentChatId', newChat._id)
         setMessages([])
         setSidebarOpen(false)
         return newChat._id
+      } else {
+        const errorData = await response.text()
+        console.error('Failed to create chat - server error:', response.status, errorData)
       }
     } catch (error) {
       console.error('Failed to create chat:', error)
@@ -414,21 +467,25 @@ function App() {
     if (user && !activeChatId) {
       const title = input.length > 50 ? input.substring(0, 50) + '...' : input
       activeChatId = await createNewChat(title)
+      if (!activeChatId) {
+        console.error('Failed to create new chat')
+        return
+      }
     }
 
     const timestamp = getTimestamp()
     const userMessage = { role: 'user', content: input, timestamp }
     setMessages(prev => [...prev, userMessage])
     
-    // Only save if user is logged in
-    if (user && activeChatId) {
-      await saveMessage(userMessage, activeChatId)
-    }
-    
     const currentInput = input // Store input before clearing
     setInput('')
     setLoading(true)
     setError('')
+
+    // Save user message immediately after creating it
+    if (user && activeChatId) {
+      await saveMessage(userMessage, activeChatId)
+    }
 
     // Create abort controller for this request
     abortControllerRef.current = new AbortController()
@@ -486,7 +543,7 @@ function App() {
         const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
         setMessages(prev => [...prev, botMessage])
         
-        // Only save if user is logged in
+        // Save bot message immediately after creating it
         if (user && activeChatId) {
           await saveMessage(botMessage, activeChatId)
         }
@@ -507,7 +564,7 @@ function App() {
         }
         setMessages(prev => [...prev, errorMessage])
         
-        // Only save if user is logged in
+        // Save error message immediately after creating it
         if (user && activeChatId) {
           await saveMessage(errorMessage, activeChatId)
         }
@@ -719,7 +776,10 @@ function App() {
             </button>
             {user && (
               <button
-                onClick={startNewChat}
+                onClick={() => {
+                  startNewChat()
+                  setSidebarOpen(false) // Close sidebar on mobile after creating new chat
+                }}
                 className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
               >
                 New Chat
@@ -807,6 +867,18 @@ function App() {
                   <Mail size={18} />
                   <span>Email Chat</span>
                 </button>
+                {user && (
+                  <button
+                    onClick={() => {
+                      startNewChat()
+                      setMenuOpen(false)
+                    }}
+                    className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                  >
+                    <Plus size={18} />
+                    <span>New Chat</span>
+                  </button>
+                )}
                 <button
                   onClick={clearChat}
                   className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}

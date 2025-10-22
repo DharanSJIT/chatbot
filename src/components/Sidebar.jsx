@@ -83,10 +83,13 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
 
   const renameChat = async (chatId, newTitle) => {
     try {
+      // Ensure clean data without circular references
+      const requestData = { title: String(newTitle) };
+      
       await fetch(`${API_BASE_URL}/api/messages/chats/${chatId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newTitle })
+        body: JSON.stringify(requestData)
       });
       setChats(chats.map(chat => 
         chat._id === chatId ? { ...chat, title: newTitle } : chat
@@ -161,7 +164,10 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
         {/* New Chat Button */}
         <div className="p-4">
           <button
-            onClick={onNewChat}
+            onClick={() => {
+              onNewChat()
+              onClose() // Close sidebar after creating new chat on mobile
+            }}
             className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 border-dashed transition-colors ${darkMode ? 'border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white' : 'border-gray-300 hover:border-gray-400 text-gray-600 hover:text-gray-900'}`}
           >
             <Plus size={20} />
