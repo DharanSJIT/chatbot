@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "build": "echo 'No build step required for Node.js backend'"
   },
   "dependencies": {
     "@datastax/astra-db-ts": "^1.5.0",
