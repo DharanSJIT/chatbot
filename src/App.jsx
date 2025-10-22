@@ -210,7 +210,7 @@ function App() {
         setStreamingMessage(currentText)
         
         // Add delay between characters (adjust speed here)
-        await new Promise(resolve => setTimeout(resolve, 1))
+        await new Promise(resolve => setTimeout(resolve, 0))
       }
       
       // Add final message to chat
