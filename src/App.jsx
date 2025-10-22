@@ -251,15 +251,20 @@ function App() {
   }
 
   // Stop generation
-  const stopGeneration = () => {
+  const stopGeneration = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       setLoading(false)
       
-      // If streaming, save current message
+      // If streaming, save current partial message
       if (isStreaming && streamingMessage) {
         const botMessage = { role: 'assistant', content: streamingMessage, timestamp: getTimestamp() }
         setMessages(prev => [...prev, botMessage])
+        
+        // Save partial message to database if user is logged in
+        if (user && currentChatId) {
+          await saveMessage(botMessage, currentChatId)
+        }
       }
       
       setIsStreaming(false)
@@ -364,8 +369,13 @@ function App() {
       // Simulate streaming by typing character by character
       setIsStreaming(true)
       let currentText = ''
+      let wasStopped = false
+      
       for (let i = 0; i < cleanedContent.length; i++) {
-        if (abortControllerRef.current?.signal.aborted) break
+        if (abortControllerRef.current?.signal.aborted) {
+          wasStopped = true
+          break
+        }
         
         currentText += cleanedContent[i]
         setStreamingMessage(currentText)
@@ -374,33 +384,28 @@ function App() {
         scrollToBottom()
         
         // Add delay between characters (adjust speed here)
-        await new Promise(resolve => setTimeout(resolve, 0))
+        await new Promise(resolve => setTimeout(resolve, 1))
       }
       
-      // Add final message to chat
-      setIsStreaming(false)
-      setStreamingMessage('')
-      setLoading(false)
-      const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
-      setMessages(prev => [...prev, botMessage])
-      
-      // Only save if user is logged in
-      if (user && activeChatId) {
-        await saveMessage(botMessage, activeChatId)
-      }
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        const stoppedMessage = { 
-          role: 'assistant', 
-          content: 'Response generation was stopped.',
-          timestamp: getTimestamp()
-        }
-        setMessages(prev => [...prev, stoppedMessage])
+      // Only add final message if not stopped
+      if (!wasStopped) {
+        setIsStreaming(false)
+        setStreamingMessage('')
+        setLoading(false)
+        const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
+        setMessages(prev => [...prev, botMessage])
         
         // Only save if user is logged in
         if (user && activeChatId) {
-          await saveMessage(stoppedMessage, activeChatId)
+          await saveMessage(botMessage, activeChatId)
         }
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Don't add any message for abort - stopGeneration handles it
+        setLoading(false)
+        setIsStreaming(false)
+        setStreamingMessage('')
       } else {
         console.error('Frontend error:', error)
         setError(error.message)
@@ -857,11 +862,15 @@ function App() {
               disabled={loading}
             />
             <button
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm sm:text-base font-medium"
+              onClick={loading || isStreaming ? stopGeneration : sendMessage}
+              disabled={!loading && !isStreaming && !input.trim()}
+              className={`px-4 sm:px-6 py-2.5 sm:py-3 text-white rounded-lg transition-colors text-sm sm:text-base font-medium ${
+                loading || isStreaming 
+                  ? 'bg-red-500 hover:bg-red-600' 
+                  : 'bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
             >
-              Send
+              {loading || isStreaming ? 'Stop' : 'Send'}
             </button>
           </div>
         </div>

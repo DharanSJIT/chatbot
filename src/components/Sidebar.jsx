@@ -265,13 +265,13 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
                         <Edit3 size={16} />
                         <span>Rename</span>
                       </button>
-                      <button
+                      {/* <button
                         onClick={() => shareChat(chat._id)}
                         className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}
                       >
                         <Share size={16} />
                         <span>Share</span>
-                      </button>
+                      </button> */}
                       <button
                         onClick={() => {
                           setShowDeleteConfirm(chat._id);
