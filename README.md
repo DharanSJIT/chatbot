@@ -2,7 +2,7 @@
 
 A modern, responsive AI chatbot application built with React and powered by LLaMA 3.1 model. Features real-time streaming responses, persistent chat history, and a sleek dark/light mode interface.
 
-## ✨ Features
+##  Features
 
 - **🚀 Lightning-fast AI responses** powered by Groq LLaMA 3.1-8B
 - **💬 Real-time streaming** with character-by-character typing animation
@@ -29,7 +29,7 @@ A modern, responsive AI chatbot application built with React and powered by LLaM
 - **CORS** enabled for cross-origin requests
 
 ### AI Integration
-- **Groq API** with LLaMA 3.1-8B-Instant model
+- **API** with LLaMA 3.1-8B-Instant model
 - **Streaming responses** for real-time interaction
 
 ## 🚀 Quick Start
@@ -61,7 +61,6 @@ A modern, responsive AI chatbot application built with React and powered by LLaM
    
    Create `.env` in root directory:
    ```env
-   VITE_GROQ_API_KEY=your_groq_api_key
    VITE_API_BASE_URL=http://localhost:3001
    ```
    
@@ -143,13 +142,9 @@ chatbot-app/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **Groq** for providing fast LLM inference
 - **DataStax AstraDB** for scalable database solutions
 - **Vercel** and **Render** for hosting platforms
 - **Tailwind CSS** for the beautiful UI framework
