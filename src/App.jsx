@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare, MoreVertical } from 'lucide-react'
 import Auth from './components/Auth'
 import Sidebar from './components/Sidebar'
 import API_BASE_URL from './config/api'
@@ -629,9 +629,9 @@ function App() {
           <div className="md:hidden relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className={`p-2 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded transition-all duration-200`}
+              className={`p-2 ${darkMode ? ' hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded transition-all duration-200`}
             >
-              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+              {menuOpen ? <X size={20} /> : <MoreVertical size={20} />}
             </button>
             
             {/* Mobile Dropdown Menu */}
