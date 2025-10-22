@@ -5,6 +5,7 @@ import Auth from './components/Auth'
 function App() {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -81,6 +82,7 @@ function App() {
   // Handle user logout
   const handleLogout = () => {
     localStorage.removeItem('user')
+    localStorage.removeItem('guestMode')
     setUser(null)
     setMessages([])
   }
@@ -232,10 +234,21 @@ function App() {
   const sendMessage = async () => {
     if (!input.trim()) return
 
+    // Show auth prompt if user not logged in and hasn't chosen to continue
+    if (!user && !localStorage.getItem('guestMode')) {
+      setShowAuthPrompt(true)
+      return
+    }
+
     const timestamp = getTimestamp()
     const userMessage = { role: 'user', content: input, timestamp }
     setMessages(prev => [...prev, userMessage])
-    await saveMessage(userMessage)
+    
+    // Only save if user is logged in
+    if (user) {
+      await saveMessage(userMessage)
+    }
+    
     setInput('')
     setLoading(true)
     setError('')
@@ -289,7 +302,11 @@ function App() {
       setLoading(false)
       const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
       setMessages(prev => [...prev, botMessage])
-      await saveMessage(botMessage)
+      
+      // Only save if user is logged in
+      if (user) {
+        await saveMessage(botMessage)
+      }
     } catch (error) {
       if (error.name === 'AbortError') {
         const stoppedMessage = { 
@@ -298,7 +315,11 @@ function App() {
           timestamp: getTimestamp()
         }
         setMessages(prev => [...prev, stoppedMessage])
-        await saveMessage(stoppedMessage)
+        
+        // Only save if user is logged in
+        if (user) {
+          await saveMessage(stoppedMessage)
+        }
       } else {
         console.error('Frontend error:', error)
         setError(error.message)
@@ -308,7 +329,11 @@ function App() {
           timestamp: getTimestamp()
         }
         setMessages(prev => [...prev, errorMessage])
-        await saveMessage(errorMessage)
+        
+        // Only save if user is logged in
+        if (user) {
+          await saveMessage(errorMessage)
+        }
       }
     }
     setLoading(false)
@@ -349,9 +374,45 @@ function App() {
     )
   }
 
-  // Show auth if no user
-  if (!user) {
-    return <Auth onLogin={handleLogin} />
+  // Show auth prompt modal
+  if (showAuthPrompt) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+          <h3 className="text-lg font-semibold mb-4">Save your chat history</h3>
+          <p className="text-gray-600 mb-6">Sign up or log in to save and continue your conversations across devices.</p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                localStorage.setItem('guestMode', 'true')
+                setShowAuthPrompt(false)
+                // Retry sending the message
+                setTimeout(() => sendMessage(), 100)
+              }}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Continue without saving
+            </button>
+            <button
+              onClick={() => {
+                setShowAuthPrompt(false)
+                setUser('temp')
+              }}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              Sign up
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show full auth component
+  if (user === 'temp') {
+    return <Auth onLogin={(userData) => {
+      handleLogin(userData)
+    }} />
   }
 
   return (
@@ -361,7 +422,7 @@ function App() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
-            <p className="text-sm opacity-75">Welcome, {user.username}</p>
+            {user && <p className="text-sm opacity-75">Welcome, {user.username}</p>}
           </div>
           
           {/* Desktop Menu */}
@@ -394,13 +455,22 @@ function App() {
             >
               Clear Chat
             </button>
-            <button
-              onClick={handleLogout}
-              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
-              title="Logout"
-            >
-              <LogOut size={16} />
-            </button>
+            {user ? (
+              <button
+                onClick={handleLogout}
+                className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowAuthPrompt(true)}
+                className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
+              >
+                Sign In
+              </button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -446,13 +516,26 @@ function App() {
                   <Trash2 size={18} />
                   <span>Clear Chat</span>
                 </button>
-                <button
-                  onClick={handleLogout}
-                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
-                >
-                  <LogOut size={18} />
-                  <span>Logout</span>
-                </button>
+                {user ? (
+                  <button
+                    onClick={handleLogout}
+                    className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                  >
+                    <LogOut size={18} />
+                    <span>Logout</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowAuthPrompt(true)
+                      setMenuOpen(false)
+                    }}
+                    className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                  >
+                    <LogOut size={18} />
+                    <span>Sign In</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
