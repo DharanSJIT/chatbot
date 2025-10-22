@@ -458,31 +458,68 @@ function App() {
   // Show auth prompt modal
   if (showAuthPrompt) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-          <h3 className="text-lg font-semibold mb-4">Save your chat history</h3>
-          <p className="text-gray-600 mb-6">Sign up or log in to save and continue your conversations across devices.</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                localStorage.setItem('guestMode', 'true')
-                setShowAuthPrompt(false)
-                // Retry sending the message
-                setTimeout(() => sendMessage(), 100)
-              }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Continue without saving
-            </button>
-            <button
-              onClick={() => {
-                setShowAuthPrompt(false)
-                setUser('temp')
-              }}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-            >
-              Sign up
-            </button>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-gray-200">
+            <div className="flex items-center">
+              <div className="bg-green-100 p-2 rounded-lg mr-3">
+                <MessageSquare className="h-5 w-5 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Save your conversations</h3>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="px-6 py-5">
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              Create an account to save your chat history and continue conversations across all your devices.
+            </p>
+            
+            {/* Benefits */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center text-sm text-gray-600">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-3"></div>
+                <span>Save unlimited conversations</span>
+              </div>
+              <div className="flex items-center text-sm text-gray-600">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-3"></div>
+                <span>Access from any device</span>
+              </div>
+              <div className="flex items-center text-sm text-gray-600">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-3"></div>
+                <span>Search through chat history</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Actions */}
+          <div className="px-6 py-4 bg-gray-50 rounded-b-xl">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => {
+                  localStorage.setItem('guestMode', 'true')
+                  setShowAuthPrompt(false)
+                  // Retry sending the message
+                  setTimeout(() => sendMessage(), 100)
+                }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+              >
+                Continue as guest
+              </button>
+              <button
+                onClick={() => {
+                  setShowAuthPrompt(false)
+                  setUser('temp')
+                }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+              >
+                Create account
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 text-center mt-3">
+              Guest mode doesn't save conversations
+            </p>
           </div>
         </div>
       </div>
