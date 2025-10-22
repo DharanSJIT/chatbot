@@ -33,6 +33,18 @@ export const initCollections = async () => {
       }
     }
     
+    // Create chats collection
+    try {
+      await db.createCollection('chats');
+      console.log('✅ Chats collection created');
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        console.log('✅ Chats collection exists');
+      } else {
+        throw error;
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error('❌ Collection creation failed:', error.message);
@@ -42,7 +54,8 @@ export const initCollections = async () => {
 
 export const collections = {
   users: db.collection('users'),
-  messages: db.collection('messages')
+  messages: db.collection('messages'),
+  chats: db.collection('chats')
 };
 
 export default db;

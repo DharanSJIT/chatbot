@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut, MessageSquare } from 'lucide-react'
 import Auth from './components/Auth'
+import Sidebar from './components/Sidebar'
 import API_BASE_URL from './config/api'
 
 function App() {
   const [user, setUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
+  const [currentChatId, setCurrentChatId] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -24,7 +27,7 @@ function App() {
   const searchInputRef = useRef(null)
   const menuRef = useRef(null)
 
-  // Check for existing user session
+  // Check for existing user session and restore chat state
   useEffect(() => {
     const checkAuth = async () => {
       const savedUser = localStorage.getItem('user')
@@ -32,10 +35,17 @@ function App() {
         try {
           const userData = JSON.parse(savedUser)
           setUser(userData)
-          await loadUserMessages(userData.userId)
+          
+          // Restore current chat if exists
+          const savedChatId = localStorage.getItem('currentChatId')
+          if (savedChatId && savedChatId !== 'null') {
+            setCurrentChatId(savedChatId)
+            await loadUserMessages(userData.userId, savedChatId)
+          }
         } catch (error) {
           console.error('Invalid user data, clearing session')
           localStorage.removeItem('user')
+          localStorage.removeItem('currentChatId')
         }
       }
       setIsLoading(false)
@@ -44,9 +54,12 @@ function App() {
   }, [])
 
   // Load user messages from backend
-  const loadUserMessages = async (userId) => {
+  const loadUserMessages = async (userId, chatId = null) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/messages/${userId}`)
+      const url = chatId 
+        ? `${API_BASE_URL}/api/messages/${userId}/${chatId}`
+        : `${API_BASE_URL}/api/messages/${userId}`
+      const response = await fetch(url)
       if (response.ok) {
         const messages = await response.json()
         setMessages(Array.isArray(messages) ? messages : [])
@@ -60,32 +73,91 @@ function App() {
   }
 
   // Save message to backend
-  const saveMessage = async (message) => {
-    if (user) {
+  const saveMessage = async (message, chatId) => {
+    if (user && chatId) {
       try {
+        console.log('Saving message to chat:', chatId, 'Message:', message.content?.substring(0, 30))
         await fetch(`${API_BASE_URL}/api/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...message, userId: user.userId })
+          body: JSON.stringify({ 
+            ...message, 
+            userId: user.userId,
+            chatId: chatId 
+          })
         })
+        
+        // Refresh sidebar
+        if (window.refreshSidebar) {
+          setTimeout(() => window.refreshSidebar(), 300)
+        }
       } catch (error) {
         console.error('Failed to save message:', error)
       }
+    } else {
+      console.log('Not saving message - missing user or chatId:', { user: !!user, chatId })
     }
   }
 
   // Handle user login
   const handleLogin = (userData) => {
     setUser(userData)
-    loadUserMessages(userData.userId)
+    // Don't auto-load messages - start with fresh chat
+  }
+
+  // Create new chat with title
+  const createNewChat = async (title = 'New Chat') => {
+    if (!user) return
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/messages/chats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId: user.userId,
+          title: title
+        })
+      })
+      
+      if (response.ok) {
+        const newChat = await response.json()
+        setCurrentChatId(newChat._id)
+        localStorage.setItem('currentChatId', newChat._id)
+        setMessages([])
+        setSidebarOpen(false)
+        return newChat._id
+      }
+    } catch (error) {
+      console.error('Failed to create chat:', error)
+    }
+    return null
+  }
+
+  // Select chat from sidebar
+  const selectChat = (chatId) => {
+    setCurrentChatId(chatId)
+    localStorage.setItem('currentChatId', chatId)
+    loadUserMessages(user.userId, chatId)
+    setSidebarOpen(false)
+  }
+
+  // Start new chat (clear current)
+  const startNewChat = () => {
+    setCurrentChatId(null)
+    localStorage.removeItem('currentChatId')
+    setMessages([])
+    setSidebarOpen(false)
   }
 
   // Handle user logout
   const handleLogout = () => {
     localStorage.removeItem('user')
     localStorage.removeItem('guestMode')
+    localStorage.removeItem('currentChatId')
     setUser(null)
     setMessages([])
+    setCurrentChatId(null)
+    setSidebarOpen(false)
   }
 
   const scrollToBottom = () => {
@@ -241,15 +313,23 @@ function App() {
       return
     }
 
+    // Create new chat if user is logged in and no current chat
+    let activeChatId = currentChatId
+    if (user && !activeChatId) {
+      const title = input.length > 50 ? input.substring(0, 50) + '...' : input
+      activeChatId = await createNewChat(title)
+    }
+
     const timestamp = getTimestamp()
     const userMessage = { role: 'user', content: input, timestamp }
     setMessages(prev => [...prev, userMessage])
     
     // Only save if user is logged in
-    if (user) {
-      await saveMessage(userMessage)
+    if (user && activeChatId) {
+      await saveMessage(userMessage, activeChatId)
     }
     
+    const currentInput = input // Store input before clearing
     setInput('')
     setLoading(true)
     setError('')
@@ -305,8 +385,8 @@ function App() {
       setMessages(prev => [...prev, botMessage])
       
       // Only save if user is logged in
-      if (user) {
-        await saveMessage(botMessage)
+      if (user && activeChatId) {
+        await saveMessage(botMessage, activeChatId)
       }
     } catch (error) {
       if (error.name === 'AbortError') {
@@ -318,8 +398,8 @@ function App() {
         setMessages(prev => [...prev, stoppedMessage])
         
         // Only save if user is logged in
-        if (user) {
-          await saveMessage(stoppedMessage)
+        if (user && activeChatId) {
+          await saveMessage(stoppedMessage, activeChatId)
         }
       } else {
         console.error('Frontend error:', error)
@@ -332,8 +412,8 @@ function App() {
         setMessages(prev => [...prev, errorMessage])
         
         // Only save if user is logged in
-        if (user) {
-          await saveMessage(errorMessage)
+        if (user && activeChatId) {
+          await saveMessage(errorMessage, activeChatId)
         }
       }
     }
@@ -417,13 +497,39 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+      {/* Sidebar - Only show when open */}
+      {sidebarOpen && (
+        <Sidebar 
+          user={user}
+          currentChatId={currentChatId}
+          onChatSelect={selectChat}
+          onNewChat={createNewChat}
+          darkMode={darkMode}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
       {/* Header */}
       <div className={`${darkMode ? 'bg-green-700' : 'bg-green-600'} text-white p-3 sm:p-4`}>
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
-            {user && <p className="text-sm opacity-75">Welcome, {user.username}</p>}
+          <div className="flex items-center gap-3">
+            {user && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className={`p-2 rounded ${darkMode ? 'hover:bg-green-800' : 'hover:bg-green-700'} transition-colors`}
+                title="Toggle Sidebar"
+              >
+                <Menu size={20} />
+              </button>
+            )}
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
+              {user && <p className="text-sm opacity-75">Welcome, {user.username}</p>}
+            </div>
           </div>
           
           {/* Desktop Menu */}
@@ -456,6 +562,14 @@ function App() {
             >
               Clear Chat
             </button>
+            {user && (
+              <button
+                onClick={startNewChat}
+                className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
+              >
+                New Chat
+              </button>
+            )}
             {user ? (
               <button
                 onClick={handleLogout}
@@ -715,6 +829,7 @@ function App() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   )
 }
