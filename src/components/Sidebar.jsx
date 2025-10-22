@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Trash2, X } from 'lucide-react';
+import { Search, Plus, Trash2, X, MoreHorizontal, Edit3, Share, Check } from 'lucide-react';
 import API_BASE_URL from '../config/api';
 
 export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, darkMode, isOpen, onClose }) {
   const [chats, setChats] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredChats, setFilteredChats] = useState([]);
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [editingChat, setEditingChat] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   // Refresh chats when sidebar opens
   useEffect(() => {
@@ -38,6 +42,17 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
     }
   }, [searchQuery, chats]);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (activeMenu && !event.target.closest('.relative')) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeMenu]);
+
   const loadChats = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/messages/chats/${user.userId}`);
@@ -50,21 +65,70 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
     }
   };
 
-  const deleteChat = async (chatId, e) => {
-    e.stopPropagation();
-    if (confirm('Delete this chat?')) {
-      try {
-        await fetch(`${API_BASE_URL}/api/messages/chats/${chatId}`, {
-          method: 'DELETE'
-        });
-        setChats(chats.filter(chat => chat._id !== chatId));
-        if (currentChatId === chatId) {
-          onNewChat();
-        }
-      } catch (error) {
-        console.error('Failed to delete chat:', error);
+  const deleteChat = async (chatId) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/messages/chats/${chatId}`, {
+        method: 'DELETE'
+      });
+      setChats(chats.filter(chat => chat._id !== chatId));
+      if (currentChatId === chatId) {
+        onNewChat();
       }
+      setShowDeleteConfirm(null);
+      setActiveMenu(null);
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
     }
+  };
+
+  const renameChat = async (chatId, newTitle) => {
+    try {
+      await fetch(`${API_BASE_URL}/api/messages/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle })
+      });
+      setChats(chats.map(chat => 
+        chat._id === chatId ? { ...chat, title: newTitle } : chat
+      ));
+      setEditingChat(null);
+      setActiveMenu(null);
+    } catch (error) {
+      console.error('Failed to rename chat:', error);
+    }
+  };
+
+  const shareChat = async (chatId) => {
+    try {
+      const chat = chats.find(c => c._id === chatId);
+      if (navigator.share) {
+        await navigator.share({
+          title: chat.title,
+          text: `Check out this AI conversation: ${chat.title}`,
+          url: window.location.href
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        // You could show a toast here
+      }
+      setActiveMenu(null);
+    } catch (error) {
+      console.error('Failed to share chat:', error);
+    }
+  };
+
+  const handleEditSubmit = (chatId) => {
+    if (editTitle.trim()) {
+      renameChat(chatId, editTitle.trim());
+    } else {
+      setEditingChat(null);
+    }
+  };
+
+  const startEdit = (chat) => {
+    setEditingChat(chat._id);
+    setEditTitle(chat.title);
+    setActiveMenu(null);
   };
 
   if (!user) return null;
@@ -120,51 +184,146 @@ export default function Sidebar({ user, currentChatId, onChatSelect, onNewChat, 
         </div>
 
         {/* Chat List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="px-4 pb-4" style={{ height: '50vh', overflowY: 'auto' }}>
           {filteredChats.length === 0 ? (
             <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               <p className="text-sm">No chats found</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {filteredChats.map((chat) => (
-                <div
-                  key={chat._id}
-                  onClick={() => onChatSelect(chat._id)}
-                  className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                    currentChatId === chat._id
-                      ? darkMode ? 'bg-green-700' : 'bg-green-100'
-                      : darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${
+                <div key={chat._id} className="relative">
+                  <div
+                    onClick={() => !editingChat && onChatSelect(chat._id)}
+                    className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
                       currentChatId === chat._id
-                        ? darkMode ? 'text-white' : 'text-green-800'
-                        : darkMode ? 'text-gray-200' : 'text-gray-900'
-                    }`}>
-                      {chat.title}
-                    </p>
-                    <p className={`text-xs truncate ${
-                      currentChatId === chat._id
-                        ? darkMode ? 'text-green-200' : 'text-green-600'
-                        : darkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      {new Date(chat.updatedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => deleteChat(chat._id, e)}
-                    className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-opacity ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
+                        ? darkMode ? 'bg-green-700' : 'bg-green-100'
+                        : darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                    }`}
                   >
-                    <Trash2 size={14} className={darkMode ? 'text-gray-400' : 'text-gray-500'} />
-                  </button>
+                    <div className="flex-1 min-w-0 mr-2">
+                      {editingChat === chat._id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleEditSubmit(chat._id);
+                              if (e.key === 'Escape') setEditingChat(null);
+                            }}
+                            onBlur={() => handleEditSubmit(chat._id)}
+                            className={`flex-1 text-sm bg-transparent border-b ${darkMode ? 'border-gray-500 text-white' : 'border-gray-400 text-gray-900'} focus:outline-none`}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleEditSubmit(chat._id)}
+                            className={`p-1 rounded ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
+                          >
+                            <Check size={12} className={darkMode ? 'text-gray-400' : 'text-gray-500'} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className={`text-sm font-medium truncate ${
+                            currentChatId === chat._id
+                              ? darkMode ? 'text-white' : 'text-green-800'
+                              : darkMode ? 'text-gray-200' : 'text-gray-900'
+                          }`}>
+                            {chat.title}
+                          </p>
+                          <p className={`text-xs truncate ${
+                            currentChatId === chat._id
+                              ? darkMode ? 'text-green-200' : 'text-green-600'
+                              : darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            {new Date(chat.updatedAt).toLocaleDateString()}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* Menu Button - Always visible on mobile, hover on desktop */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenu(activeMenu === chat._id ? null : chat._id);
+                      }}
+                      className={`p-1.5 rounded transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
+                    >
+                      <MoreHorizontal size={16} className={darkMode ? 'text-gray-400' : 'text-gray-500'} />
+                    </button>
+                  </div>
+                  
+                  {/* Dropdown Menu */}
+                  {activeMenu === chat._id && (
+                    <div className={`absolute right-0 top-full mt-1 w-48 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg shadow-lg z-50`}>
+                      <button
+                        onClick={() => startEdit(chat)}
+                        className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}
+                      >
+                        <Edit3 size={16} />
+                        <span>Rename</span>
+                      </button>
+                      <button
+                        onClick={() => shareChat(chat._id)}
+                        className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}
+                      >
+                        <Share size={16} />
+                        <span>Share</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(chat._id);
+                          setActiveMenu(null);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-gray-100 text-red-600'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                      >
+                        <Trash2 size={16} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal - Outside sidebar container */}
+      {showDeleteConfirm && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-[100]"
+            onClick={() => setShowDeleteConfirm(null)}
+          />
+          <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none">
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 max-w-sm mx-4 shadow-xl pointer-events-auto`}>
+              <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Delete chat?
+              </h3>
+              <p className={`text-sm mb-6 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                This will delete the conversation permanently. You cannot undo this action.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} transition-colors`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => deleteChat(showDeleteConfirm)}
+                  className="flex-1 px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

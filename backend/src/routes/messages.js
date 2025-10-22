@@ -39,6 +39,26 @@ router.post('/chats', async (req, res) => {
 
 
 
+// Update chat (rename)
+router.put('/chats/:chatId', async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { title } = req.body;
+    await collections.chats.updateOne(
+      { _id: chatId },
+      { 
+        $set: { 
+          title,
+          updatedAt: new Date().toISOString()
+        }
+      }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete chat session
 router.delete('/chats/:chatId', async (req, res) => {
   try {
