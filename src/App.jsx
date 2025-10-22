@@ -12,6 +12,8 @@ function App() {
   const [searchActive, setSearchActive] = useState(false)
   const [highlightedMessages, setHighlightedMessages] = useState(new Set())
   const [menuOpen, setMenuOpen] = useState(false)
+  const [streamingMessage, setStreamingMessage] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef(null)
   const abortControllerRef = useRef(null)
   const searchInputRef = useRef(null)
@@ -112,6 +114,15 @@ function App() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       setLoading(false)
+      
+      // If streaming, save current message
+      if (isStreaming && streamingMessage) {
+        const botMessage = { role: 'assistant', content: streamingMessage, timestamp: getTimestamp() }
+        setMessages(prev => [...prev, botMessage])
+      }
+      
+      setIsStreaming(false)
+      setStreamingMessage('')
     }
   }
 
@@ -188,6 +199,23 @@ function App() {
       
       const rawContent = data.choices?.[0]?.message?.content || 'No response received'
       const cleanedContent = cleanMarkdown(rawContent)
+      
+      // Simulate streaming by typing character by character
+      setIsStreaming(true)
+      let currentText = ''
+      for (let i = 0; i < cleanedContent.length; i++) {
+        if (abortControllerRef.current?.signal.aborted) break
+        
+        currentText += cleanedContent[i]
+        setStreamingMessage(currentText)
+        
+        // Add delay between characters (adjust speed here)
+        await new Promise(resolve => setTimeout(resolve, 1))
+      }
+      
+      // Add final message to chat
+      setIsStreaming(false)
+      setStreamingMessage('')
       const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
@@ -406,8 +434,33 @@ function App() {
           </div>
         ))}
         
+        {/* Streaming Message */}
+        {isStreaming && streamingMessage && (
+          <div className="text-left mb-3 sm:mb-4">
+            <div className={`inline-block p-2.5 sm:p-3 rounded-lg max-w-[85%] sm:max-w-2xl relative group ${
+              darkMode ? 'bg-gray-800 border border-gray-700 text-gray-100' : 'bg-white border shadow-sm'
+            }`}>
+              <div className="whitespace-pre-line text-sm sm:text-base break-words">
+                {streamingMessage}<span className="animate-pulse">|</span>
+              </div>
+              <div className={`text-xs mt-1.5 sm:mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                {getTimestamp()}
+              </div>
+              <button
+                onClick={stopGeneration}
+                className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                  darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Stop generation"
+              >
+                <Square size={14} className="fill-current" />
+              </button>
+            </div>
+          </div>
+        )}
+        
         {/* Typing Indicator */}
-        {loading && (
+        {loading && !isStreaming && (
           <div className="text-left mb-3 sm:mb-4">
             <div className={`inline-block p-2.5 sm:p-3 rounded-lg ${darkMode ? 'bg-gray-800 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
               <div className="flex items-center gap-2">
