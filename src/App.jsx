@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2 } from 'lucide-react'
+import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut } from 'lucide-react'
+import Auth from './components/Auth'
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,6 +21,69 @@ function App() {
   const abortControllerRef = useRef(null)
   const searchInputRef = useRef(null)
   const menuRef = useRef(null)
+
+  // Check for existing user session
+  useEffect(() => {
+    const checkAuth = async () => {
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) {
+        try {
+          const userData = JSON.parse(savedUser)
+          setUser(userData)
+          await loadUserMessages(userData.userId)
+        } catch (error) {
+          console.error('Invalid user data, clearing session')
+          localStorage.removeItem('user')
+        }
+      }
+      setIsLoading(false)
+    }
+    checkAuth()
+  }, [])
+
+  // Load user messages from backend
+  const loadUserMessages = async (userId) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/messages/${userId}`)
+      if (response.ok) {
+        const messages = await response.json()
+        setMessages(Array.isArray(messages) ? messages : [])
+      } else {
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error)
+      setMessages([])
+    }
+  }
+
+  // Save message to backend
+  const saveMessage = async (message) => {
+    if (user) {
+      try {
+        await fetch('http://localhost:3001/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...message, userId: user.userId })
+        })
+      } catch (error) {
+        console.error('Failed to save message:', error)
+      }
+    }
+  }
+
+  // Handle user login
+  const handleLogin = (userData) => {
+    setUser(userData)
+    loadUserMessages(userData.userId)
+  }
+
+  // Handle user logout
+  const handleLogout = () => {
+    localStorage.removeItem('user')
+    setUser(null)
+    setMessages([])
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -169,6 +235,7 @@ function App() {
     const timestamp = getTimestamp()
     const userMessage = { role: 'user', content: input, timestamp }
     setMessages(prev => [...prev, userMessage])
+    await saveMessage(userMessage)
     setInput('')
     setLoading(true)
     setError('')
@@ -219,26 +286,34 @@ function App() {
       // Add final message to chat
       setIsStreaming(false)
       setStreamingMessage('')
+      setLoading(false)
       const botMessage = { role: 'assistant', content: cleanedContent, timestamp: getTimestamp() }
       setMessages(prev => [...prev, botMessage])
+      await saveMessage(botMessage)
     } catch (error) {
       if (error.name === 'AbortError') {
-        setMessages(prev => [...prev, { 
+        const stoppedMessage = { 
           role: 'assistant', 
           content: 'Response generation was stopped.',
           timestamp: getTimestamp()
-        }])
+        }
+        setMessages(prev => [...prev, stoppedMessage])
+        await saveMessage(stoppedMessage)
       } else {
         console.error('Frontend error:', error)
         setError(error.message)
-        setMessages(prev => [...prev, { 
+        const errorMessage = { 
           role: 'assistant', 
           content: `Sorry, I encountered an error: ${error.message}`,
           timestamp: getTimestamp()
-        }])
+        }
+        setMessages(prev => [...prev, errorMessage])
+        await saveMessage(errorMessage)
       }
     }
     setLoading(false)
+    setIsStreaming(false)
+    setStreamingMessage('')
     abortControllerRef.current = null
   }
 
@@ -262,12 +337,32 @@ function App() {
     )
   }
 
+  // Show loading spinner while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show auth if no user
+  if (!user) {
+    return <Auth onLogin={handleLogin} />
+  }
+
   return (
     <div className={`min-h-screen flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
       {/* Header */}
       <div className={`${darkMode ? 'bg-green-700' : 'bg-green-600'} text-white p-3 sm:p-4`}>
         <div className="flex justify-between items-center">
-          <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold">AI Chatbot</h1>
+            <p className="text-sm opacity-75">Welcome, {user.username}</p>
+          </div>
           
           {/* Desktop Menu */}
           <div className="hidden md:flex gap-2">
@@ -298,6 +393,13 @@ function App() {
               className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm transition-colors`}
             >
               Clear Chat
+            </button>
+            <button
+              onClick={handleLogout}
+              className={`px-3 py-1 ${darkMode ? 'bg-green-800 hover:bg-green-900' : 'bg-green-700 hover:bg-green-800'} rounded text-sm flex items-center gap-2 transition-colors`}
+              title="Logout"
+            >
+              <LogOut size={16} />
             </button>
           </div>
 
@@ -343,6 +445,13 @@ function App() {
                 >
                   <Trash2 size={18} />
                   <span>Clear Chat</span>
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
                 </button>
               </div>
             )}

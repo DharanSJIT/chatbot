@@ -1,0 +1,16 @@
+{
+  "name": "chatbot-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@datastax/astra-db-ts": "^1.5.0",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "uuid": "^10.0.0"
+  }
+}
