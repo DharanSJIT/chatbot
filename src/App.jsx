@@ -773,11 +773,39 @@ function App() {
                   <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
                 </button>
                 <button
-                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  onClick={() => { exportAsText(); setMenuOpen(false); }}
                   className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
                 >
-                  <Download size={18} />
-                  <span>Export Options</span>
+                  <FileText size={18} />
+                  <span>Export as Text</span>
+                </button>
+                <button
+                  onClick={() => { exportAsMarkdown(); setMenuOpen(false); }}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <FileText size={18} />
+                  <span>Export as Markdown</span>
+                </button>
+                <button
+                  onClick={() => { exportAsPDF(); setMenuOpen(false); }}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <File size={18} />
+                  <span>Export as PDF</span>
+                </button>
+                <button
+                  onClick={() => { shareChat(); setMenuOpen(false); }}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                >
+                  <Share2 size={18} />
+                  <span>Share Link</span>
+                </button>
+                <button
+                  onClick={() => { emailChat(); setMenuOpen(false); }}
+                  className={`w-full px-4 py-3 text-left flex items-center gap-3 ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100 text-gray-800'} transition-colors`}
+                >
+                  <Mail size={18} />
+                  <span>Email Chat</span>
                 </button>
                 <button
                   onClick={clearChat}
