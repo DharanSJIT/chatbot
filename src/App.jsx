@@ -25,7 +25,7 @@ function App() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, streamingMessage])
 
   useEffect(() => {
     if (searchActive && searchInputRef.current) {
@@ -208,6 +208,9 @@ function App() {
         
         currentText += cleanedContent[i]
         setStreamingMessage(currentText)
+        
+        // Scroll to bottom during typing
+        scrollToBottom()
         
         // Add delay between characters (adjust speed here)
         await new Promise(resolve => setTimeout(resolve, 0))
