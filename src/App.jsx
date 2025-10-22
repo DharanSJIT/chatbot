@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Copy, Check, Square, Download, Moon, Sun, Search, X, Menu, Trash2, LogOut } from 'lucide-react'
 import Auth from './components/Auth'
+import API_BASE_URL from './config/api'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -45,7 +46,7 @@ function App() {
   // Load user messages from backend
   const loadUserMessages = async (userId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/messages/${userId}`)
+      const response = await fetch(`${API_BASE_URL}/api/messages/${userId}`)
       if (response.ok) {
         const messages = await response.json()
         setMessages(Array.isArray(messages) ? messages : [])
@@ -62,7 +63,7 @@ function App() {
   const saveMessage = async (message) => {
     if (user) {
       try {
-        await fetch('http://localhost:3001/api/messages', {
+        await fetch(`${API_BASE_URL}/api/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...message, userId: user.userId })
